@@ -49,13 +49,24 @@ export default function Navbar({ theme, onToggleTheme }) {
           </NavLink>
           <NavLink
             to="/catalog"
+            end
             className={({ isActive }) =>
               `text-sm font-semibold transition-colors duration-200 py-1 ${
                 isActive ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-primary'
               }`
             }
           >
-            Shop Collection
+            Shop All
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Clothes"
+            className={({ isActive }) =>
+              `text-sm font-semibold transition-colors duration-200 py-1 ${
+                isActive ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-primary'
+              }`
+            }
+          >
+            Clothes
           </NavLink>
           <NavLink
             to="/catalog?tryon=active"
