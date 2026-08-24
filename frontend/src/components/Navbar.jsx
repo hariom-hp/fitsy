@@ -59,14 +59,44 @@ export default function Navbar({ theme, onToggleTheme }) {
             Shop All
           </NavLink>
           <NavLink
-            to="/catalog?category=Clothes"
+            to="/catalog?category=Outerwear"
             className={({ isActive }) =>
               `text-sm font-semibold transition-colors duration-200 py-1 ${
                 isActive ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-primary'
               }`
             }
           >
-            Clothes
+            Outerwear
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Tops"
+            className={({ isActive }) =>
+              `text-sm font-semibold transition-colors duration-200 py-1 ${
+                isActive ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-primary'
+              }`
+            }
+          >
+            Tops
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Bottoms"
+            className={({ isActive }) =>
+              `text-sm font-semibold transition-colors duration-200 py-1 ${
+                isActive ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-primary'
+              }`
+            }
+          >
+            Bottoms
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Dresses"
+            className={({ isActive }) =>
+              `text-sm font-semibold transition-colors duration-200 py-1 ${
+                isActive ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-primary'
+              }`
+            }
+          >
+            Dresses
           </NavLink>
           <NavLink
             to="/catalog?tryon=active"
@@ -162,7 +192,35 @@ export default function Navbar({ theme, onToggleTheme }) {
             onClick={() => setIsMenuOpen(false)}
             className="text-base font-medium text-on-surface hover:text-primary"
           >
-            Shop Collection
+            Shop All
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Outerwear"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-base font-medium text-on-surface hover:text-primary"
+          >
+            Outerwear
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Tops"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-base font-medium text-on-surface hover:text-primary"
+          >
+            Tops
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Bottoms"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-base font-medium text-on-surface hover:text-primary"
+          >
+            Bottoms
+          </NavLink>
+          <NavLink
+            to="/catalog?category=Dresses"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-base font-medium text-on-surface hover:text-primary"
+          >
+            Dresses
           </NavLink>
           <NavLink
             to="/catalog?tryon=active"
