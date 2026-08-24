@@ -1,5 +1,9 @@
 const Wishlist = require('../models/Wishlist');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
+
+const isDbReady = () => mongoose.connection.readyState === 1;
+const memoryWishlists = {};
 
 const getOrCreateWishlist = async (userId) => {
   let wishlist = await Wishlist.findOne({ user: userId }).populate('items.productId');
@@ -13,11 +17,11 @@ const formatWishlistItems = (wishlist) => {
   return wishlist.items
     .filter((item) => item.productId != null)
     .map((item) => ({
-      productId: item.productId._id,
-      name: item.productId.name,
-      price: item.productId.price,
-      image: item.productId.image,
-      category: item.productId.category,
+      productId: item.productId._id || item.productId,
+      name: item.productId.name || item.name,
+      price: item.productId.price || item.price,
+      image: item.productId.image || item.image,
+      category: item.productId.category || item.category,
     }));
 };
 
@@ -25,13 +29,17 @@ const formatWishlistItems = (wishlist) => {
 // @route   GET /api/wishlist
 // @access  Private
 const getWishlist = async (req, res) => {
-  try {
-    const wishlist = await getOrCreateWishlist(req.user._id);
-    res.json({ items: formatWishlistItems(wishlist) });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server Error' });
+  if (isDbReady()) {
+    try {
+      const wishlist = await getOrCreateWishlist(req.user._id);
+      return res.json({ items: formatWishlistItems(wishlist) });
+    } catch (error) {
+      console.warn('[DB Error during getWishlist, using memory wishlist]:', error.message);
+    }
   }
+
+  const userWishlist = memoryWishlists[req.user._id] || [];
+  return res.json({ items: userWishlist });
 };
 
 // @desc    Toggle item in wishlist

@@ -260,6 +260,43 @@ const importData = async () => {
     await Cart.deleteMany();
     await Wishlist.deleteMany();
 
+    // Create Admin and Demo User accounts
+    const adminUser = await User.create({
+      name: 'Admin User',
+      email: 'admin@fitsy.com',
+      password: 'admin123',
+      isAdmin: true,
+      shippingAddresses: [
+        {
+          fullName: 'Fitsy HQ Admin',
+          address: '100 Fashion Ave, Suite 400',
+          city: 'New York',
+          state: 'NY',
+          postalCode: '10001',
+          country: 'United States',
+          phoneNumber: '+1 555-0199',
+        },
+      ],
+    });
+
+    const demoUser = await User.create({
+      name: 'Alex Johnson',
+      email: 'alex.johnson@example.com',
+      password: 'password123',
+      isAdmin: false,
+      shippingAddresses: [
+        {
+          fullName: 'Alex Johnson',
+          address: '742 Evergreen Terrace',
+          city: 'Springfield',
+          state: 'OR',
+          postalCode: '97477',
+          country: 'United States',
+          phoneNumber: '+1 555-0142',
+        },
+      ],
+    });
+
     const productsToInsert = [];
     
     // Duplicate products slightly to create a richer looking catalog (up to ~36 items)
@@ -272,7 +309,7 @@ const importData = async () => {
 
     await Product.insertMany(productsToInsert);
 
-    console.log('Data Imported successfully!');
+    console.log(`Data Imported successfully! Created Admin (${adminUser.email}) and Demo user (${demoUser.email}).`);
     process.exit();
   } catch (error) {
     console.error(`Error: ${error.message}`);

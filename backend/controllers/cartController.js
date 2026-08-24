@@ -1,5 +1,9 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
+
+const isDbReady = () => mongoose.connection.readyState === 1;
+const memoryCarts = {};
 
 // Helper to get or create cart for a user
 const getOrCreateCart = async (userId) => {
@@ -15,12 +19,12 @@ const formatCartItems = (cart) => {
   return cart.items
     .filter((item) => item.productId != null) // filter out deleted products
     .map((item) => ({
-      productId: item.productId._id,
+      productId: item.productId._id || item.productId,
       size: item.size,
       quantity: item.quantity,
-      name: item.productId.name,
-      price: item.productId.price,
-      image: item.productId.image,
+      name: item.productId.name || item.name,
+      price: item.productId.price || item.price,
+      image: item.productId.image || item.image,
     }));
 };
 
@@ -28,13 +32,17 @@ const formatCartItems = (cart) => {
 // @route   GET /api/cart
 // @access  Private
 const getCart = async (req, res) => {
-  try {
-    const cart = await getOrCreateCart(req.user._id);
-    res.json({ items: formatCartItems(cart) });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server Error' });
+  if (isDbReady()) {
+    try {
+      const cart = await getOrCreateCart(req.user._id);
+      return res.json({ items: formatCartItems(cart) });
+    } catch (error) {
+      console.warn('[DB Error during getCart, using memory cart]:', error.message);
+    }
   }
+
+  const userCart = memoryCarts[req.user._id] || [];
+  return res.json({ items: userCart });
 };
 
 // @desc    Add item to cart or increment quantity

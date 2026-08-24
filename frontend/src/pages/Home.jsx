@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, Star, Camera, ShieldCheck, Zap, Layers, RefreshCw } from 'lucide-react';
+import { ArrowRight, Sparkles, Star, Camera, ShieldCheck, Zap, Layers, RefreshCw, Play } from 'lucide-react';
 import { useProducts } from '../context/ProductsContext';
 import GarmentTryOn from '../components/GarmentTryOn';
+import ProductImage from '../components/ProductImage';
 
 export default function Home() {
   const { products } = useProducts();
@@ -125,21 +126,9 @@ export default function Home() {
               Launch Virtual Fitting Room
             </button>
           </div>
+        </div>
+      </section>
 
-<<<<<<< HEAD
-          <div className="relative z-10 w-full md:w-80 h-96 rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20 bg-slate-900 group">
-            <img
-              src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80"
-              alt="FITSY Try-On Preview"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-5">
-              <div className="flex items-center justify-between text-white mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider bg-primary/80 px-2.5 py-1 rounded-full">
-                  AI Fit Verified
-                </span>
-                <span className="text-xs font-bold text-emerald-400">98.4% Accuracy</span>
-=======
       <section className="container split-story section-space">
         <div className="split-story__panel split-story__panel--dark">
           <span className="eyebrow">Live Try-On</span>
@@ -163,11 +152,9 @@ export default function Home() {
                 <p>
                   <Star size={13} fill="currentColor" /> {product.rating} rated
                 </p>
->>>>>>> upstream/main
               </div>
-              <p className="text-sm font-bold text-white">Luxe Tailored Oversized Coat</p>
-            </div>
-          </div>
+            </Link>
+          ))}
         </div>
       </section>
 

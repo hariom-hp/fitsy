@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import Footer from './components/Footer';
 import Navbar from './components/Navbar';
+import AdminRoute from './components/AdminRoute';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import { ProductsProvider } from './context/ProductsContext';
@@ -51,7 +52,14 @@ function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/catalog" element={<Catalog />} />
                     <Route path="/product/:id" element={<ProductPage />} />
-                    <Route path="/admin" element={<AdminPage />} />
+                    <Route
+                      path="/admin"
+                      element={
+                        <AdminRoute>
+                          <AdminPage />
+                        </AdminRoute>
+                      }
+                    />
                     <Route path="/auth" element={<AuthPage />} />
                     <Route
                       path="/account"
@@ -90,7 +98,9 @@ function App() {
                     <Route
                       path="/admin-dashboard"
                       element={
-                        <AdminDashboard />
+                        <AdminRoute>
+                          <AdminDashboard />
+                        </AdminRoute>
                       }
                     />
                   </Routes>
