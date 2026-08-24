@@ -92,7 +92,7 @@ export default function Navbar({ theme, onToggleTheme }) {
           </button>
 
           <Link
-            to={isAuthenticated ? '/account' : '/auth'}
+            to="/wishlist"
             className="relative p-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant"
             title="Wishlist"
           >
@@ -105,7 +105,7 @@ export default function Navbar({ theme, onToggleTheme }) {
           </Link>
 
           <Link
-            to="/checkout"
+            to="/cart"
             className="relative p-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant"
             title="Shopping Cart"
           >
