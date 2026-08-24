@@ -180,7 +180,7 @@ export default function CartPage() {
                 <div className="space-y-3.5 text-sm">
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Subtotal</span>
-                    <span className="font-bold text-on-surface">${subtotal.toFixed(2)}</span>
+                    <span className="font-bold text-on-surface">${(Number(subtotal) || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Shipping</span>
@@ -188,13 +188,13 @@ export default function CartPage() {
                   </div>
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Estimated Tax (8%)</span>
-                    <span className="font-bold text-on-surface">${estimatedTax.toFixed(2)}</span>
+                    <span className="font-bold text-on-surface">${(Number(estimatedTax) || 0).toFixed(2)}</span>
                   </div>
 
                   <div className="border-t border-outline-variant/30 pt-3.5 flex justify-between items-baseline">
                     <span className="text-base font-extrabold text-on-surface">Total</span>
                     <span className="text-2xl font-extrabold text-primary">
-                      ${total.toFixed(2)}
+                      ${(Number(total) || 0).toFixed(2)}
                     </span>
                   </div>
                 </div>

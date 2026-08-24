@@ -293,14 +293,20 @@ export function StoreProvider({ children }) {
       wishlistItems,
       cartLoading,
       wishlistLoading,
+      subtotal,
+      estimatedTax,
+      total,
       addToCart,
       removeFromCart,
       updateCartQuantity,
+      clearCart: clearCartLocal,
       clearCartLocal,
       toggleWishlist,
+      isInWishlist,
+      clearWishlist,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cartItems, wishlistItems, cartLoading, wishlistLoading],
+    [cartItems, wishlistItems, cartLoading, wishlistLoading, subtotal, estimatedTax, total],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
