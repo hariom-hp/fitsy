@@ -19,7 +19,7 @@ export default function Catalog() {
   );
   const [query, setQuery] = useState('');
   const [selectedSort, setSelectedSort] = useState('Featured');
-  const [maxPrice, setMaxPrice] = useState(300);
+  const [maxPrice, setMaxPrice] = useState(2000);
   const [selectedSizes, setSelectedSizes] = useState([]);
   const [activeTryOnProduct, setActiveTryOnProduct] = useState(null);
 
@@ -138,9 +138,9 @@ export default function Catalog() {
               </div>
               <input
                 type="range"
-                min="30"
-                max="300"
-                step="10"
+                min="20"
+                max="2000"
+                step="20"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(Number(e.target.value))}
                 className="w-full accent-primary cursor-pointer"
