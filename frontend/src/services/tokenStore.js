@@ -1,18 +1,36 @@
-// ─── Token Store (Deprecated) ──────────────────────────────────────────────────
-// This module is no longer used for JWT storage because the backend now sets an
-// httpOnly cookie that the browser manages automatically.
-// The functions are kept temporarily to prevent breaking existing imports,
-// but they no longer do anything.
+// ─── Token Store ─────────────────────────────────────────────────────────────
+// Supports token fallback in memory/sessionStorage alongside httpOnly cookies.
 // ─────────────────────────────────────────────────────────────────────────────
 
+let memoryToken = null;
+
 export function getToken() {
-  return null;
+  if (memoryToken) return memoryToken;
+  try {
+    return sessionStorage.getItem('fitsy_token');
+  } catch {
+    return null;
+  }
 }
 
-export function setToken() {
-  // No-op: backend handles cookie
+export function setToken(token) {
+  memoryToken = token;
+  try {
+    if (token) {
+      sessionStorage.setItem('fitsy_token', token);
+    } else {
+      sessionStorage.removeItem('fitsy_token');
+    }
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 export function clearToken() {
-  // No-op: AuthContext calls /api/auth/logout which clears the cookie
+  memoryToken = null;
+  try {
+    sessionStorage.removeItem('fitsy_token');
+  } catch {
+    // Ignore storage errors
+  }
 }

@@ -14,12 +14,15 @@
 
 import { clearToken, getToken } from './tokenStore';
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const RAW_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
 
 // ─── Core request helper ──────────────────────────────────────────────────────
 async function request(path, options = {}) {
+  const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
@@ -45,9 +48,9 @@ async function request(path, options = {}) {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 // Expected responses:
-//   login/register → { token: string, user: { _id, name, email } }
+//   login/register → { token: string, user: { _id, name, email, isAdmin } }
 //   logout         → { message: string }
-//   me             → { user: { _id, name, email } }
+//   me             → { user: { _id, name, email, isAdmin } }
 export const auth = {
   login: (credentials) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
@@ -64,11 +67,13 @@ export const auth = {
 
   updateAddress: (addressData) =>
     request('/auth/address', { method: 'PUT', body: JSON.stringify(addressData) }),
+
+  getAllUsers: () =>
+    request('/auth/users'),
 };
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 // Expected response: { products: Product[], total: number }
-// Product shape is documented in frontend.txt Section 11.
 export const products = {
   getAll: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -76,6 +81,23 @@ export const products = {
   },
 
   getById: (id) => request(`/products/${id}`),
+
+  create: (productData) =>
+    request('/products', {
+      method: 'POST',
+      body: JSON.stringify(productData),
+    }),
+
+  update: (id, productData) =>
+    request(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(productData),
+    }),
+
+  delete: (id) =>
+    request(`/products/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
@@ -137,4 +159,13 @@ export const orders = {
 
   getMyOrders: () =>
     request('/orders/myorders'),
+
+  getAll: () =>
+    request('/orders'),
+
+  updateStatus: (id, status) =>
+    request(`/orders/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
 };

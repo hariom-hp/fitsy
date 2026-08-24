@@ -4,7 +4,7 @@ const Cart = require('../models/Cart');
 const User = require('../models/User');
 const { sendOrderConfirmationEmail } = require('../utils/sendEmail');
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51MockStripeKeyForDevelopmentFitsy00000000000');
 
 /**
  * Stripe webhook handler.

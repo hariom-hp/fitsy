@@ -44,7 +44,9 @@ export default function AuthPage() {
     }
 
     setFeedback('');
-    navigate('/account');
+    const targetPath =
+      location.state?.from?.pathname || (result.user?.isAdmin ? '/admin' : '/account');
+    navigate(targetPath, { replace: true });
   }
 
   return (

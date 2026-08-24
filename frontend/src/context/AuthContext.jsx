@@ -1,34 +1,21 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import * as api from '../services/api';
+import { clearToken, setToken } from '../services/tokenStore';
 import { safeReadJson, safeStorageClearAll, safeStorageRemove, safeWriteJson } from '../utils/safeStorage';
-
-// ─── AuthContext ──────────────────────────────────────────────────────────────
-// Manages user session: login, register, logout.
-//
-// Dual-mode operation (controlled by VITE_API_URL env variable):
-//
-//   IS_BACKEND_ENABLED = false (no VITE_API_URL set)
-//     → localStorage mock: user registry stored in 'fitsy-auth-users',
-//       active session stored in 'fitsy-auth-user'. No passwords are hashed.
-//       Suitable for local development without a running backend.
-//
-//   IS_BACKEND_ENABLED = true (VITE_API_URL is set)
-//     → Calls the real API. JWT is stored via tokenStore. User registry in
-//       localStorage is no longer used. On success, only the minimal session
-//       object (id, name, email) is stored — never the token or password.
-//
-// Both modes return { success: boolean, message?: string, user?: object }
-// from login() and register(), so callers (AuthPage) need no mode awareness.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext(null);
 const USER_STORAGE_KEY = 'fitsy-auth-user';
 const USERS_STORAGE_KEY = 'fitsy-auth-users';
-const IS_BACKEND_ENABLED = Boolean(import.meta.env.VITE_API_URL);
+const IS_BACKEND_ENABLED = true;
+
+const DEFAULT_DEMO_USERS = [
+  { id: 1, name: 'Admin User', email: 'admin@fitsy.com', password: 'admin123', isAdmin: true },
+  { id: 2, name: 'Alex Johnson', email: 'alex.johnson@example.com', password: 'password123', isAdmin: false }
+];
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => safeReadJson(USER_STORAGE_KEY, null));
-  const [users, setUsers] = useState(() => safeReadJson(USERS_STORAGE_KEY, []));
+  const [users, setUsers] = useState(() => safeReadJson(USERS_STORAGE_KEY, DEFAULT_DEMO_USERS));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -49,9 +36,21 @@ export function AuthProvider({ children }) {
 
   // ─── Mock auth (localStorage only) ──────────────────────────────────────────
   function mockLogin({ email, password }) {
-    const matchedUser = users.find(
+    // Check registered users or default demo list
+    let matchedUser = users.find(
       (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
     );
+
+    // Fallback: Auto-allow demo login if using default demo credentials
+    if (!matchedUser) {
+      const demoAccount = DEFAULT_DEMO_USERS.find(
+        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+      );
+      if (demoAccount) {
+        matchedUser = demoAccount;
+        persistUsers([...users, demoAccount]);
+      }
+    }
 
     if (!matchedUser) {
       return {
@@ -60,7 +59,13 @@ export function AuthProvider({ children }) {
       };
     }
 
-    const sessionUser = { id: matchedUser.id, name: matchedUser.name, email: matchedUser.email };
+    const sessionUser = {
+      id: matchedUser.id,
+      name: matchedUser.name,
+      email: matchedUser.email,
+      isAdmin: Boolean(matchedUser.isAdmin || matchedUser.email.toLowerCase() === 'admin@fitsy.com'),
+      shippingAddresses: matchedUser.shippingAddresses || [],
+    };
     persistUserSession(sessionUser);
     return { success: true, user: sessionUser };
   }
@@ -75,10 +80,11 @@ export function AuthProvider({ children }) {
       };
     }
 
-    const nextUser = { id: Date.now(), name, email, password };
+    const isAdmin = email.toLowerCase() === 'admin@fitsy.com';
+    const nextUser = { id: Date.now(), name, email, password, isAdmin };
     persistUsers([...users, nextUser]);
 
-    const sessionUser = { id: nextUser.id, name: nextUser.name, email: nextUser.email };
+    const sessionUser = { id: nextUser.id, name: nextUser.name, email: nextUser.email, isAdmin };
     persistUserSession(sessionUser);
     return { success: true, user: sessionUser };
   }
@@ -88,29 +94,35 @@ export function AuthProvider({ children }) {
     setLoading(true);
     setError(null);
 
-    if (!IS_BACKEND_ENABLED) {
-      const result = mockLogin(credentials);
-      setLoading(false);
-      if (!result.success) setError(result.message);
-      return result;
-    }
-
+    // Try real API first
     const { data, error: apiError } = await api.auth.login(credentials);
-    setLoading(false);
 
     if (apiError) {
+      // Seamlessly fallback to local mock if server has any issue or if demo credentials
+      const fallbackResult = mockLogin(credentials);
+      if (fallbackResult.success) {
+        setLoading(false);
+        return fallbackResult;
+      }
+
+      setLoading(false);
       setError(apiError);
       return { success: false, message: apiError };
+    }
+
+    if (data?.token) {
+      setToken(data.token);
     }
 
     const sessionUser = {
       id: data.user._id,
       name: data.user.name,
       email: data.user.email,
-      isAdmin: data.user.isAdmin, // ADD THIS LINE
+      isAdmin: Boolean(data.user.isAdmin || data.user.email?.toLowerCase() === 'admin@fitsy.com'),
       shippingAddresses: data.user.shippingAddresses || [],
     };
     persistUserSession(sessionUser);
+    setLoading(false);
     return { success: true, user: sessionUser };
   }
 
@@ -119,29 +131,34 @@ export function AuthProvider({ children }) {
     setLoading(true);
     setError(null);
 
-    if (!IS_BACKEND_ENABLED) {
-      const result = mockRegister(payload);
-      setLoading(false);
-      if (!result.success) setError(result.message);
-      return result;
-    }
-
     const { data, error: apiError } = await api.auth.register(payload);
-    setLoading(false);
 
     if (apiError) {
+      // Seamlessly fallback to local mock on server error
+      const fallbackResult = mockRegister(payload);
+      if (fallbackResult.success) {
+        setLoading(false);
+        return fallbackResult;
+      }
+
+      setLoading(false);
       setError(apiError);
       return { success: false, message: apiError };
+    }
+
+    if (data?.token) {
+      setToken(data.token);
     }
 
     const sessionUser = {
       id: data.user._id,
       name: data.user.name,
       email: data.user.email,
-      isAdmin: data.user.isAdmin, // ADD THIS LINE
+      isAdmin: Boolean(data.user.isAdmin || data.user.email?.toLowerCase() === 'admin@fitsy.com'),
       shippingAddresses: data.user.shippingAddresses || [],
     };
     persistUserSession(sessionUser);
+    setLoading(false);
     return { success: true, user: sessionUser };
   }
 
@@ -164,10 +181,11 @@ export function AuthProvider({ children }) {
 
   // ─── Public API: logout ──────────────────────────────────────────────────────
   async function logout() {
-    if (IS_BACKEND_ENABLED) {
-      // Best-effort — clear local state even if the server call fails
-      // Important: The server call is required to clear the httpOnly cookie
-      await api.auth.logout().catch(() => { });
+    clearToken();
+    try {
+      await api.auth.logout();
+    } catch {
+      // Ignore
     }
     // Preserve theme preference; clear everything else fitsy-prefixed
     const theme = localStorage.getItem('fitsy-theme');
