@@ -33,7 +33,10 @@ export default function Catalog() {
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesCategory =
-        selectedCategory === 'All' || product.category === selectedCategory;
+        selectedCategory === 'All' ||
+        product.category === selectedCategory ||
+        (selectedCategory === 'Clothes' &&
+          ['Clothes', 'Outerwear', 'Tops', 'Bottoms', 'Dresses'].includes(product.category));
       const matchesQuery = [product.name, product.category, product.accent, product.badge]
         .join(' ')
         .toLowerCase()
