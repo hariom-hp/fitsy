@@ -1,6 +1,6 @@
 // Relative path so calls go through the Vite dev proxy (vite.config.js) like
 // the rest of the app — avoids CORS and any dev-server port mismatch.
-const API_BASE_URL = 'http://localhost:5001/api/tryon';
+const API_BASE_URL = '/api/tryon';
 
 /**
  * Sends image data to backend SAM 2 body estimation engine
