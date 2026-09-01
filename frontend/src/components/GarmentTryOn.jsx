@@ -396,7 +396,7 @@ export default function GarmentTryOn({ product, onClose }) {
                 FITSY AI Virtual Fitting Room
               </h2>
               <p className="text-xs text-on-surface-variant">
-                FLUX.2 Klein 9B + Real-Time Garment Overlay &amp; Fit Analysis
+                Pose-Aware Garment Overlay &amp; AI Fit Analysis
               </p>
             </div>
           </div>
