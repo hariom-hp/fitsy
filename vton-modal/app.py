@@ -352,7 +352,7 @@ async def generate_endpoint(req: GenerateRequest):
             bottom_desc = "the same pants shown in the third reference image"
 
         model = FluxKlein9BTryOn()
-        result = model.generate.remote(
+        result = await model.generate.aio(
             human_b64=human_b64,
             top_b64=top_b64,
             bottom_b64=bottom_b64,
