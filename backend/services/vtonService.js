@@ -13,10 +13,12 @@ const TIMEOUT_MS = 120000; // Modal cold start (weights load) can be slow.
  * @returns {Promise<{image: string}>} base64 data-URL of the generated try-on
  */
 async function generateTryOn({ human, garment, category }) {
-  const url = process.env.MODAL_VTON_URL;
-  if (!url) {
+  const rawUrl = process.env.MODAL_VTON_URL;
+  if (!rawUrl) {
     throw new Error('Neural try-on engine is not configured (MODAL_VTON_URL unset).');
   }
+
+  const url = rawUrl.endsWith('/generate') ? rawUrl : `${rawUrl.replace(/\/+$/, '')}/generate`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
