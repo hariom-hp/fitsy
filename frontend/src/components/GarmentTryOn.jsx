@@ -126,7 +126,6 @@ function torsoQuad(lm, w, h, fit) {
   const p = (i) => {
     const pt = lm[i];
     if (!pt) return { x: w / 2, y: h / 2 };
-    // Safely handle both normalized [0..1] and absolute pixel coordinates
     let x = pt.x;
     let y = pt.y;
     if (x <= 1.0) x = x * w;
@@ -149,14 +148,18 @@ function torsoQuad(lm, w, h, fit) {
   const side = { x: -up.y, y: up.x };
 
   const shoulderW = Math.hypot(rs.x - ls.x, rs.y - ls.y);
-  const halfW = Math.max(w * 0.18, (shoulderW / 2) * fit.widen);
+  // Scale width to cover full shoulder width + armholes
+  const halfW = Math.max(w * 0.22, (shoulderW / 2) * 1.35 * fit.widen);
+
+  // Position collar around neck base (above shoulder line) + user Y offset
+  const yShiftPx = (fit.offsetY || 0) * (len / 100);
   const top = {
-    x: shoulderMid.x - up.x * len * 0.12 + up.x * fit.offsetY,
-    y: shoulderMid.y - up.y * len * 0.12 + up.y * fit.offsetY,
+    x: shoulderMid.x - up.x * (len * 0.32 + yShiftPx),
+    y: shoulderMid.y - up.y * (len * 0.32 + yShiftPx),
   };
   const bottom = {
-    x: shoulderMid.x + up.x * len * fit.lengthen + up.x * fit.offsetY,
-    y: shoulderMid.y + up.y * len * fit.lengthen + up.y * fit.offsetY,
+    x: shoulderMid.x + up.x * (len * 1.15 * fit.lengthen - yShiftPx),
+    y: shoulderMid.y + up.y * (len * 1.15 * fit.lengthen - yShiftPx),
   };
 
   const TL = { x: top.x - side.x * halfW, y: top.y - side.y * halfW };
@@ -187,12 +190,13 @@ export default function GarmentTryOn({ product, onClose }) {
   const [progress, setProgress] = useState(0);
   const [genMessage, setGenMessage] = useState('Analyzing body posture on Python backend...');
   const [errorMessage, setErrorMessage] = useState('');
-  const [fit, setFit] = useState({ widen: 1.15, lengthen: 1.35, offsetY: 0 });
+  const [fit, setFit] = useState({ widen: 1.15, lengthen: 1.15, offsetY: 0 });
   const [selectedSize, setSelectedSize] = useState(product?.sizes?.[0] || 'M');
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [sam2Result, setSam2Result] = useState(null);
   const [showSamMask, setShowSamMask] = useState(false);
   const [renderMode, setRenderMode] = useState('geometric'); // 'neural' | 'geometric'
+  const [isGeneratingNeural, setIsGeneratingNeural] = useState(false);
 
   useEffect(() => {
     if (status !== 'ready' || step !== 3) return;
@@ -341,6 +345,29 @@ export default function GarmentTryOn({ product, onClose }) {
     }
   }
 
+  async function handleGenerateNeuralVTON() {
+    if (!photoRef.current || !product?.image || isGeneratingNeural) return;
+    setIsGeneratingNeural(true);
+    try {
+      const category = product?.vtoType === 'lower-body' ? 'lower_body' : 'upper_body';
+      const garmentImg = await loadImage(product.image);
+      const neuralImage = await generateTryOnNeural({
+        human: toDataUrlScaled(photoRef.current),
+        garment: toDataUrlScaled(garmentImg),
+        category,
+      });
+      if (neuralImage) {
+        resultImgRef.current = await loadImage(neuralImage);
+        setRenderMode('neural');
+      }
+    } catch (err) {
+      console.warn('FLUX VTON error:', err);
+      alert(err.message || 'FLUX AI Try-On container is currently warming up on Modal GPU. Please retry in a few moments.');
+    } finally {
+      setIsGeneratingNeural(false);
+    }
+  }
+
   function handleFileUpload(e) {
     const file = e.target.files?.[0];
     if (file) {
@@ -378,42 +405,43 @@ export default function GarmentTryOn({ product, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-      <div className="bg-surface border border-outline-variant/50 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-on-surface my-auto">
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between bg-surface-container-low">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto">
+      <div className="relative w-full max-w-4xl bg-surface border border-outline-variant/60 rounded-3xl shadow-2xl overflow-hidden my-8 max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/40 bg-surface-container-low shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-on-surface">FITSY AI Virtual Fitting Room</h3>
-              <p className="text-xs text-on-surface-variant">Real-Time Garment Overlay &amp; Fit Analysis</p>
+              <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
+                FITSY AI Virtual Fitting Room
+              </h2>
+              <p className="text-xs text-on-surface-variant">
+                FLUX.2 Klein 9B + Real-Time Garment Overlay &amp; Fit Analysis
+              </p>
             </div>
           </div>
 
-          {/* Steps Indicator */}
-          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold">
-            <span className={`px-3 py-1 rounded-full ${step === 1 ? 'bg-primary text-white' : 'bg-surface-container text-on-surface-variant'}`}>
-              1. Photo
-            </span>
+          {/* Stepper Indicator */}
+          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
+            <span className={step >= 1 ? 'text-primary' : ''}>1. Photo</span>
             <span>&rarr;</span>
-            <span className={`px-3 py-1 rounded-full ${step === 2 ? 'bg-primary text-white' : 'bg-surface-container text-on-surface-variant'}`}>
-              2. Render
-            </span>
+            <span className={step >= 2 ? 'text-primary' : ''}>2. Render</span>
             <span>&rarr;</span>
-            <span className={`px-3 py-1 rounded-full ${step === 3 ? 'bg-primary text-white' : 'bg-surface-container text-on-surface-variant'}`}>
-              3. Result
-            </span>
+            <span className={step === 3 ? 'text-primary' : ''}>3. Result</span>
           </div>
 
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-on-surface">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Content Body */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto flex-1">
           {/* Step 1: Upload Photo or Select Sample Model */}
           {step === 1 && (
             <div className="space-y-8">
@@ -514,7 +542,7 @@ export default function GarmentTryOn({ product, onClose }) {
 
                   <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5">
                     <Layers className="w-3 h-3 text-cyan-400" />
-                    {renderMode === 'neural' ? 'Neural GPU Try-On' : 'Geometric Warp (Fallback)'}
+                    {renderMode === 'neural' ? 'FLUX.2 Klein 9B AI (Modal GPU)' : 'Real-Time Geometric Warp'}
                   </div>
 
                   {/* Body Mask Toggle Button Overlay (geometric mode only) */}
@@ -540,7 +568,7 @@ export default function GarmentTryOn({ product, onClose }) {
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
                       <span className="text-on-surface-variant">Estimation Engine</span>
                       <span className="font-bold text-cyan-600 dark:text-cyan-400 text-right">
-                        {sam2Result?.engine || '—'}
+                        {renderMode === 'neural' ? 'FLUX.2 Klein 9B + Try-On LoRA' : 'MediaPipe BlazePose + SAM 2'}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
@@ -591,16 +619,43 @@ export default function GarmentTryOn({ product, onClose }) {
                       </div>
                       <input
                         type="range"
-                        min="0.9"
-                        max="2.0"
+                        min="0.8"
+                        max="1.8"
                         step="0.02"
                         value={fit.lengthen}
                         onChange={(e) => setFit((f) => ({ ...f, lengthen: Number(e.target.value) }))}
                         className="w-full accent-primary cursor-pointer"
                       />
                     </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span>Vertical Shift</span>
+                        <span className="font-bold text-primary">{fit.offsetY > 0 ? `+${fit.offsetY}` : fit.offsetY}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-50"
+                        max="50"
+                        step="1"
+                        value={fit.offsetY}
+                        onChange={(e) => setFit((f) => ({ ...f, offsetY: Number(e.target.value) }))}
+                        className="w-full accent-primary cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
+                )}
+
+                {/* FLUX Photorealistic Generation Button */}
+                {renderMode === 'geometric' && (
+                  <button
+                    onClick={handleGenerateNeuralVTON}
+                    disabled={isGeneratingNeural}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-primary text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                    {isGeneratingNeural ? 'Generating on Modal GPU...' : '✨ Generate Photorealistic FLUX AI Look'}
+                  </button>
                 )}
 
                 <div className="space-y-2">
@@ -640,4 +695,3 @@ export default function GarmentTryOn({ product, onClose }) {
     </div>
   );
 }
-
