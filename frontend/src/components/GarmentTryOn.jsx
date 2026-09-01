@@ -241,9 +241,9 @@ export default function GarmentTryOn({ product, onClose }) {
         console.warn('Pose estimation error (non-fatal):', backendErr);
       }
 
-      // Step 2: Real FLUX GPU try-on via Modal Labs L40S
+      // Step 2: Photorealistic AI Try-On on GPU
       setProgress(40);
-      setGenMessage('Sending to FLUX.2 Klein 9B on Modal L40S GPU...');
+      setGenMessage('Rendering photorealistic virtual look on Cloud GPU...');
 
       const category = product?.vtoType === 'lower-body' ? 'lower_body' : 'upper_body';
       const t0 = Date.now();
@@ -258,11 +258,11 @@ export default function GarmentTryOn({ product, onClose }) {
       setGenerationTime(((Date.now() - t0) / 1000).toFixed(1));
 
       if (!neuralImage) {
-        throw new Error('FLUX GPU returned empty result.');
+        throw new Error('AI try-on engine returned empty result.');
       }
 
       setProgress(90);
-      setGenMessage('Rendering result...');
+      setGenMessage('Finalizing HD render...');
 
       resultImgRef.current = await loadImage(neuralImage);
       setProgress(100);
@@ -272,13 +272,13 @@ export default function GarmentTryOn({ product, onClose }) {
         setStep(3);
       }, 300);
     } catch (err) {
-      console.error('FLUX Try-On error:', err);
+      console.error('AI Try-On error:', err);
       setStatus('error');
       setStep(1);
       setErrorMessage(
         err.message?.includes('timed out')
-          ? 'Modal GPU is cold-starting. Please try again in 1-2 minutes.'
-          : err.message || 'Failed to generate try-on. Check Modal GPU status.'
+          ? 'AI GPU container is initializing. Please try again in 1 minute.'
+          : err.message || 'Failed to generate try-on. Please try again.'
       );
     }
   }
@@ -333,7 +333,7 @@ export default function GarmentTryOn({ product, onClose }) {
                 FITSY AI Virtual Try-On
               </h2>
               <p className="text-xs text-on-surface-variant">
-                FLUX.2 Klein 9B &bull; Modal Labs L40S GPU &bull; Real AI Try-On
+                High-Precision AI Virtual Try-On Engine
               </p>
             </div>
           </div>
@@ -451,7 +451,7 @@ export default function GarmentTryOn({ product, onClose }) {
 
                   <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5">
                     <Layers className="w-3 h-3 text-cyan-400" />
-                    FLUX.2 Klein 9B • Modal L40S GPU
+                    FITSY Neural AI Try-On
                   </div>
 
                   <div className="absolute top-4 right-4 bg-emerald-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
@@ -461,28 +461,28 @@ export default function GarmentTryOn({ product, onClose }) {
 
                   {generationTime && (
                     <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg">
-                      ⚡ {generationTime}s on GPU
+                      ⚡ {generationTime}s AI Render
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* GPU Inference Details */}
+              {/* AI Inference Details */}
               <div className="lg:col-span-5 space-y-6">
                 <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-3">
                   <h4 className="font-bold text-sm text-on-surface flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" /> GPU Inference Details
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" /> AI Try-On Details
                   </h4>
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
-                      <span className="text-on-surface-variant">Model</span>
+                      <span className="text-on-surface-variant">Engine</span>
                       <span className="font-bold text-cyan-600 dark:text-cyan-400 text-right">
-                        FLUX.2 Klein 9B + Try-On LoRA
+                        FITSY Neural VTON Engine
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
-                      <span className="text-on-surface-variant">GPU</span>
-                      <span className="font-bold text-emerald-600">NVIDIA L40S 48GB</span>
+                      <span className="text-on-surface-variant">Hardware</span>
+                      <span className="font-bold text-emerald-600">High-Performance Cloud GPU</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
                       <span className="text-on-surface-variant">Inference Time</span>
@@ -491,8 +491,8 @@ export default function GarmentTryOn({ product, onClose }) {
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
-                      <span className="text-on-surface-variant">Platform</span>
-                      <span className="font-bold text-primary">Modal Labs (Serverless)</span>
+                      <span className="text-on-surface-variant">Resolution</span>
+                      <span className="font-bold text-primary">1024 × 1024 HD</span>
                     </div>
                     {sam2Result?.fitMetrics?.poseVisibility != null && (
                       <div className="flex justify-between py-1">
@@ -510,7 +510,7 @@ export default function GarmentTryOn({ product, onClose }) {
                   onClick={() => { if (photoRef.current) processImage(photoRef.current.src); }}
                   className="w-full py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-primary text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer transition-all"
                 >
-                  <RefreshCw className="w-4 h-4" /> Regenerate on GPU (New Seed)
+                  <RefreshCw className="w-4 h-4" /> Regenerate Look (New Seed)
                 </button>
 
                 <div className="space-y-2">
