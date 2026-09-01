@@ -9,9 +9,11 @@ export default defineConfig({
     // forwarded here so the Vite dev server avoids CORS issues.
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:5001',
+        target: 'http://localhost:5001',
         changeOrigin: true,
         secure: false,
+        timeout: 300000,
+        proxyTimeout: 300000,
       },
     },
   },
