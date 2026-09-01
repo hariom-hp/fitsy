@@ -76,13 +76,13 @@ gpu_image = (
 
 def build_prompt(human_desc: str, top_desc: str, bottom_desc: str) -> str:
     if not human_desc:
-        human_desc = "person, standing casually"
+        human_desc = "the same person in the photo"
     if not top_desc:
         top_desc = "the same top"
     if not bottom_desc:
         bottom_desc = "the same pants"
         
-    return f"TRYON {human_desc}. Replace the outfit with {top_desc} and {bottom_desc} as shown in the reference images. The final image is a full body shot."
+    return f"TRYON {human_desc}. The top should be {top_desc}. The bottom should be {bottom_desc}. Only change the specified garment. Keep the rest of the outfit, background, pose, and body exactly as in the original photo."
 
 
 # ─── GPU Inference (Pure Serverless) ──────────────────────────────────────────
@@ -310,25 +310,26 @@ async def generate_endpoint(req: GenerateRequest):
         human_b64 = fetch_image_b64(req.human)
         garment_b64 = fetch_image_b64(req.garment)
         
-        # Determine top/bottom based on category
-        blank_b64 = create_blank_b64()
+        # Determine top/bottom based on category.
+        # KEY: For the slot we are NOT changing, send the ORIGINAL human photo
+        # so the model preserves the person's existing clothing in that area.
+        # A blank white image causes the model to hallucinate new clothing.
         
         if req.category in ["upper_body", "dresses"]:
             top_b64 = garment_b64
-            bottom_b64 = blank_b64
-            top_desc = req.garment_desc if req.garment_desc else "a stylish top"
-            bottom_desc = "basic pants"
+            bottom_b64 = human_b64  # keep original pants
+            top_desc = req.garment_desc if req.garment_desc else "the garment shown in the reference"
+            bottom_desc = "the same pants and shoes the person is already wearing, unchanged"
         elif req.category == "lower_body":
-            top_b64 = blank_b64
+            top_b64 = human_b64  # keep original top
             bottom_b64 = garment_b64
-            top_desc = "a basic top"
-            bottom_desc = req.garment_desc if req.garment_desc else "stylish pants"
+            top_desc = "the same top and accessories the person is already wearing, unchanged"
+            bottom_desc = req.garment_desc if req.garment_desc else "the garment shown in the reference"
         else:
-            # fallback
             top_b64 = garment_b64
-            bottom_b64 = blank_b64
-            top_desc = "a stylish top"
-            bottom_desc = "basic pants"
+            bottom_b64 = human_b64
+            top_desc = "the garment shown in the reference"
+            bottom_desc = "the same pants the person is already wearing, unchanged"
 
         model = FluxKlein9BTryOn()
         result = model.generate.remote(
