@@ -22,7 +22,7 @@ app = modal.App("fitsy-vton")
 MODEL_ID = "black-forest-labs/FLUX.2-klein-9B"
 DEFAULT_STEPS = 28
 MAX_STEPS = 30
-DEFAULT_GUIDANCE = 2.5
+DEFAULT_GUIDANCE = 3.0
 
 # Virtual Try-On LoRA
 LORA_REPO = "fal/flux-klein-9b-virtual-tryon-lora"
@@ -82,7 +82,7 @@ def build_prompt(human_desc: str, top_desc: str, bottom_desc: str) -> str:
     if not bottom_desc:
         bottom_desc = "the bottom pants shown in the third reference image"
         
-    return f"TRYON {human_desc}. Replace the outfit with {top_desc} and {bottom_desc} as shown in the reference images. The final image is a full body shot."
+    return f"TRYON {human_desc}. Replace the outfit with {top_desc} and {bottom_desc} as shown in the reference images, preserving the exact original color, shade, fabric texture, wash, and pattern of the clothes without changing their color. The final image is a high quality full body photo."
 
 
 # ─── GPU Inference (Pure Serverless) ──────────────────────────────────────────
@@ -338,18 +338,21 @@ async def generate_endpoint(req: GenerateRequest):
         if req.category in ["upper_body", "dresses"]:
             top_b64 = garment_b64
             bottom_b64 = crop_half_b64(human_b64, keep="bottom")
-            top_desc = req.garment_desc if req.garment_desc else "the top garment shown in the second reference image"
-            bottom_desc = "the same pants shown in the third reference image"
+            garment_item = f"the {req.garment_desc}" if req.garment_desc else "the top garment"
+            top_desc = f"{garment_item} in its exact original color, material and pattern from the second reference image"
+            bottom_desc = "the same pants shown in the third reference image, keeping their exact original color and style"
         elif req.category == "lower_body":
             top_b64 = crop_half_b64(human_b64, keep="top")
             bottom_b64 = garment_b64
-            top_desc = "the same top shown in the second reference image"
-            bottom_desc = req.garment_desc if req.garment_desc else "the bottom pants shown in the third reference image"
+            garment_item = f"the {req.garment_desc}" if req.garment_desc else "the bottom garment"
+            top_desc = "the same top shown in the second reference image, keeping its exact original color and style"
+            bottom_desc = f"{garment_item} in its exact original color, material and pattern from the third reference image"
         else:
             top_b64 = garment_b64
             bottom_b64 = crop_half_b64(human_b64, keep="bottom")
-            top_desc = req.garment_desc if req.garment_desc else "the top garment shown in the second reference image"
-            bottom_desc = "the same pants shown in the third reference image"
+            garment_item = f"the {req.garment_desc}" if req.garment_desc else "the top garment"
+            top_desc = f"{garment_item} in its exact original color from the second reference image"
+            bottom_desc = "the same pants shown in the third reference image, keeping their exact original color"
 
         model = FluxKlein9BTryOn()
         result = await model.generate.remote.aio(
