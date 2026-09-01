@@ -53,8 +53,8 @@ def run(image_input):
     lms = res.pose_landmarks.landmark
 
     def pt(i):
-        return {"x": round(lms[i].x * w, 2), "y": round(lms[i].y * h, 2),
-                "v": round(lms[i].visibility, 3)}
+        return {"x": round(float(lms[i].x), 4), "y": round(float(lms[i].y), 4),
+                "v": round(float(lms[i].visibility), 3)}
 
     # Person mask -> RGBA PNG: person opaque white, background transparent,
     # so the browser can use it directly as a destination-in clip.

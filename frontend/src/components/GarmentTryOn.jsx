@@ -41,51 +41,100 @@ function toDataUrlScaled(img, max = 1024) {
 // image borders: only pixels *connected to the edge* and close to the corner
 // color are cleared. This keeps the garment intact even when its color is
 // similar to the background (a global color key would delete the shirt too).
-// ponytail: edge flood-fill — good for flat/studio backgrounds; on-model or
-// cluttered garment photos still need cutout PNGs or a segmentation model.
+// Prepare garment image canvas, preserving transparency for PNGs and
+// removing plain studio backgrounds for photos.
 function cutoutBackground(img) {
+  const W = img.naturalWidth || img.width || 800;
+  const H = img.naturalHeight || img.height || 800;
   const c = document.createElement('canvas');
-  const W = (c.width = img.naturalWidth);
-  const H = (c.height = img.naturalHeight);
+  c.width = W;
+  c.height = H;
   const x = c.getContext('2d');
-  x.drawImage(img, 0, 0);
-  const d = x.getImageData(0, 0, W, H);
-  const p = d.data;
+  x.drawImage(img, 0, 0, W, H);
 
-  // Reference background color = average of the 4 corners.
-  const corners = [0, (W - 1) * 4, (H - 1) * W * 4, (W * H - 1) * 4];
-  let br = 0, bg = 0, bb = 0;
-  for (const i of corners) { br += p[i]; bg += p[i + 1]; bb += p[i + 2]; }
-  br /= 4; bg /= 4; bb /= 4;
+  try {
+    const d = x.getImageData(0, 0, W, H);
+    const p = d.data;
 
-  const TOL2 = 60 * 60; // squared euclidean distance threshold
-  const near = (i) => {
-    const dr = p[i] - br, dg = p[i + 1] - bg, db = p[i + 2] - bb;
-    return dr * dr + dg * dg + db * db < TOL2;
-  };
+    // Check if the image is already a transparent PNG
+    let transparentCount = 0;
+    for (let i = 3; i < p.length; i += 40) {
+      if (p[i] < 30) transparentCount++;
+    }
 
-  const visited = new Uint8Array(W * H);
-  const stack = [];
-  const seed = (px) => { if (!visited[px] && near(px * 4)) { visited[px] = 1; stack.push(px); } };
-  for (let xi = 0; xi < W; xi++) { seed(xi); seed((H - 1) * W + xi); }
-  for (let yi = 0; yi < H; yi++) { seed(yi * W); seed(yi * W + W - 1); }
+    // If already transparent, do not modify
+    if (transparentCount > 5) {
+      return c;
+    }
 
-  while (stack.length) {
-    const px = stack.pop();
-    p[px * 4 + 3] = 0; // clear alpha: this is background
-    const py = (px / W) | 0, pxCol = px % W;
-    if (pxCol > 0) seed(px - 1);
-    if (pxCol < W - 1) seed(px + 1);
-    if (py > 0) seed(px - W);
-    if (py < H - 1) seed(px + W);
+    // Reference background color = average of the 4 corners
+    const corners = [0, (W - 1) * 4, (H - 1) * W * 4, (W * H - 1) * 4];
+    let br = 0, bg = 0, bb = 0;
+    for (const i of corners) {
+      br += p[i];
+      bg += p[i + 1];
+      bb += p[i + 2];
+    }
+    br /= 4;
+    bg /= 4;
+    bb /= 4;
+
+    const TOL2 = 50 * 50;
+    const near = (i) => {
+      const dr = p[i] - br,
+        dg = p[i + 1] - bg,
+        db = p[i + 2] - bb;
+      return dr * dr + dg * dg + db * db < TOL2;
+    };
+
+    const visited = new Uint8Array(W * H);
+    const stack = [];
+    const seed = (px) => {
+      if (!visited[px] && near(px * 4)) {
+        visited[px] = 1;
+        stack.push(px);
+      }
+    };
+    for (let xi = 0; xi < W; xi++) {
+      seed(xi);
+      seed((H - 1) * W + xi);
+    }
+    for (let yi = 0; yi < H; yi++) {
+      seed(yi * W);
+      seed(yi * W + W - 1);
+    }
+
+    while (stack.length) {
+      const px = stack.pop();
+      p[px * 4 + 3] = 0;
+      const py = (px / W) | 0,
+        pxCol = px % W;
+      if (pxCol > 0) seed(px - 1);
+      if (pxCol < W - 1) seed(px + 1);
+      if (py > 0) seed(px - W);
+      if (py < H - 1) seed(px + W);
+    }
+
+    x.putImageData(d, 0, 0);
+  } catch (err) {
+    console.warn('[GarmentTryOn] Background cutout fallback:', err);
   }
-
-  x.putImageData(d, 0, 0);
   return c;
 }
 
 function torsoQuad(lm, w, h, fit) {
-  const p = (i) => ({ x: lm[i].x * w, y: lm[i].y * h });
+  const p = (i) => {
+    const pt = lm[i];
+    if (!pt) return { x: w / 2, y: h / 2 };
+    // Safely handle both normalized [0..1] and absolute pixel coordinates
+    let x = pt.x;
+    let y = pt.y;
+    if (x <= 1.0) x = x * w;
+    else if (x > w) x = (x / 1024) * w;
+    if (y <= 1.0) y = y * h;
+    else if (y > h) y = (y / 1024) * h;
+    return { x, y };
+  };
   const ls = p(L.lShoulder);
   const rs = p(L.rShoulder);
   const lh = p(L.lHip);
@@ -100,7 +149,7 @@ function torsoQuad(lm, w, h, fit) {
   const side = { x: -up.y, y: up.x };
 
   const shoulderW = Math.hypot(rs.x - ls.x, rs.y - ls.y);
-  const halfW = (shoulderW / 2) * fit.widen;
+  const halfW = Math.max(w * 0.18, (shoulderW / 2) * fit.widen);
   const top = {
     x: shoulderMid.x - up.x * len * 0.12 + up.x * fit.offsetY,
     y: shoulderMid.y - up.y * len * 0.12 + up.y * fit.offsetY,
@@ -151,12 +200,11 @@ export default function GarmentTryOn({ product, onClose }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // Neural mode: the Modal GPU already produced the worn-garment image — just
-    // draw it. No warp/mask compositing needed.
+    // Neural mode: the Modal GPU already produced the worn-garment image
     if (renderMode === 'neural' && resultImgRef.current) {
       const img = resultImgRef.current;
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(img, 0, 0);
       return;
@@ -167,13 +215,13 @@ export default function GarmentTryOn({ product, onClose }) {
     const garment = garmentRef.current;
     if (!photo || !lm || !garment) return;
 
-    canvas.width = photo.naturalWidth;
-    canvas.height = photo.naturalHeight;
+    canvas.width = photo.naturalWidth || photo.width;
+    canvas.height = photo.naturalHeight || photo.height;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(photo, 0, 0);
 
-    const gw = garment.naturalWidth;
-    const gh = garment.naturalHeight;
+    const gw = garment.width || garment.naturalWidth || 800;
+    const gh = garment.height || garment.naturalHeight || 800;
     const src = [
       [gw * (0.5 - GARMENT_SRC.halfWidth), gh * GARMENT_SRC.top],
       [gw * (0.5 + GARMENT_SRC.halfWidth), gh * GARMENT_SRC.top],
@@ -182,29 +230,22 @@ export default function GarmentTryOn({ product, onClose }) {
     ];
     const dst = torsoQuad(lm, canvas.width, canvas.height, fit);
 
-    // Warp the (background-removed) garment onto an offscreen layer, then clip
-    // it to the real body silhouette so it follows the body instead of sitting
-    // as a rectangle. Mask = person opaque, background transparent (from backend).
+    // Warp the garment onto an offscreen layer
     const layer = document.createElement('canvas');
     layer.width = canvas.width;
     layer.height = canvas.height;
     const lctx = layer.getContext('2d');
     warpImageQuad(lctx, garment, src, dst);
 
-    if (samMaskImgRef.current) {
-      lctx.globalCompositeOperation = 'destination-in';
-      lctx.drawImage(samMaskImgRef.current, 0, 0, canvas.width, canvas.height);
-      lctx.globalCompositeOperation = 'source-over';
-    }
-    ctx.drawImage(layer, 0, 0);
-
-    // Optional: show the raw body mask as a translucent overlay for inspection.
     if (showSamMask && samMaskImgRef.current) {
       ctx.save();
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.3;
       ctx.drawImage(samMaskImgRef.current, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
+
+    // Render warped garment
+    ctx.drawImage(layer, 0, 0);
   }, [status, step, fit, showSamMask, renderMode]);
 
   async function processImage(photoSrc) {
