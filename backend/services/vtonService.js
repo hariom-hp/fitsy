@@ -3,7 +3,8 @@
 // A missing URL or any failure throws, so the controller can answer 503 and the
 // frontend falls back to the geometric warp instead of hard-failing.
 
-const TIMEOUT_MS = 120000; // Modal cold start (weights load) can be slow.
+// Modal cold start (loading 9B weights onto L40S GPU) can take 2-3 minutes on first boot.
+const TIMEOUT_MS = 300000; // 5 minutes timeout for cold boot resilience
 
 /**
  * @param {Object} payload
