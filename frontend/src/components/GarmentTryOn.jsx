@@ -190,159 +190,86 @@ export default function GarmentTryOn({ product, onClose }) {
   const [progress, setProgress] = useState(0);
   const [genMessage, setGenMessage] = useState('Analyzing body posture on Python backend...');
   const [errorMessage, setErrorMessage] = useState('');
-  const [fit, setFit] = useState({ widen: 1.15, lengthen: 1.15, offsetY: 0 });
   const [selectedSize, setSelectedSize] = useState(product?.sizes?.[0] || 'M');
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [sam2Result, setSam2Result] = useState(null);
-  const [showSamMask, setShowSamMask] = useState(false);
-  const [renderMode, setRenderMode] = useState('geometric'); // 'neural' | 'geometric'
-  const [isGeneratingNeural, setIsGeneratingNeural] = useState(false);
+  const [generationTime, setGenerationTime] = useState(null);
 
+  // Render the FLUX GPU result onto canvas
   useEffect(() => {
     if (status !== 'ready' || step !== 3) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !resultImgRef.current) return;
     const ctx = canvas.getContext('2d');
-
-    // Neural mode: the Modal GPU already produced the worn-garment image
-    if (renderMode === 'neural' && resultImgRef.current) {
-      const img = resultImgRef.current;
-      canvas.width = img.naturalWidth || img.width;
-      canvas.height = img.naturalHeight || img.height;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(img, 0, 0);
-      return;
-    }
-
-    const photo = photoRef.current;
-    const lm = landmarksRef.current;
-    const garment = garmentRef.current;
-    if (!photo || !lm || !garment) return;
-
-    canvas.width = photo.naturalWidth || photo.width;
-    canvas.height = photo.naturalHeight || photo.height;
+    const img = resultImgRef.current;
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(photo, 0, 0);
-
-    const gw = garment.width || garment.naturalWidth || 800;
-    const gh = garment.height || garment.naturalHeight || 800;
-    const src = [
-      [gw * (0.5 - GARMENT_SRC.halfWidth), gh * GARMENT_SRC.top],
-      [gw * (0.5 + GARMENT_SRC.halfWidth), gh * GARMENT_SRC.top],
-      [gw * (0.5 + GARMENT_SRC.halfWidth), gh * GARMENT_SRC.bottom],
-      [gw * (0.5 - GARMENT_SRC.halfWidth), gh * GARMENT_SRC.bottom],
-    ];
-    const dst = torsoQuad(lm, canvas.width, canvas.height, fit);
-
-    // Warp the garment onto an offscreen layer
-    const layer = document.createElement('canvas');
-    layer.width = canvas.width;
-    layer.height = canvas.height;
-    const lctx = layer.getContext('2d');
-    warpImageQuad(lctx, garment, src, dst);
-
-    if (showSamMask && samMaskImgRef.current) {
-      ctx.save();
-      ctx.globalAlpha = 0.3;
-      ctx.drawImage(samMaskImgRef.current, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-    }
-
-    // Render warped garment
-    ctx.drawImage(layer, 0, 0);
-  }, [status, step, fit, showSamMask, renderMode]);
+    ctx.drawImage(img, 0, 0);
+  }, [status, step]);
 
   async function processImage(photoSrc) {
     setStep(2);
     setStatus('detecting');
-    setProgress(15);
-    setGenMessage('Connecting to pose & segmentation backend...');
+    setProgress(10);
+    setGenMessage('Loading your photo...');
     setErrorMessage('');
     setSam2Result(null);
+    setGenerationTime(null);
 
     try {
       const photo = await loadImage(photoSrc);
       photoRef.current = photo;
       const garmentImg = await loadImage(product.image);
-      garmentRef.current = cutoutBackground(garmentImg);
 
-      setProgress(40);
-      setGenMessage('Estimating body pose & silhouette on Python backend...');
-
-      // Send a real (downscaled base64) image to the Python backend — the
-      // backend measures the actual pose from pixels, not client-side guesses.
-      // Best-effort: powers the metrics panel and the geometric fallback pose.
-      let samData = null;
-      let backendMsg = '';
+      // Step 1: Pose estimation (for metrics panel)
+      setProgress(20);
+      setGenMessage('Analyzing body pose on backend...');
       try {
-        samData = await estimateBodyPositionSAM2(toDataUrlScaled(photo));
+        const samData = await estimateBodyPositionSAM2(toDataUrlScaled(photo));
         setSam2Result(samData);
-
-        if (samData.maskBase64) {
-          samMaskImgRef.current = await loadImage(samData.maskBase64);
-        }
       } catch (backendErr) {
-        backendMsg = backendErr?.message || String(backendErr);
-        console.warn('Backend pose estimation error:', backendErr);
+        console.warn('Pose estimation error (non-fatal):', backendErr);
       }
 
-      // ── Geometric warp is the primary mode: it preserves the user's exact
-      // face, pose, and background. FLUX AI is available as an opt-in
-      // "AI Style Preview" button on the result screen.
-      setProgress(65);
-      setGenMessage('Warping garment onto body contour...');
+      // Step 2: Real FLUX GPU try-on via Modal Labs L40S
+      setProgress(40);
+      setGenMessage('Sending to FLUX.2 Klein 9B on Modal L40S GPU...');
 
-      setRenderMode('geometric');
+      const category = product?.vtoType === 'lower-body' ? 'lower_body' : 'upper_body';
+      const t0 = Date.now();
 
-      const defaultLandmarks = {
-        [L.lShoulder]: { x: 0.36, y: 0.28 },
-        [L.rShoulder]: { x: 0.64, y: 0.28 },
-        [L.lHip]: { x: 0.39, y: 0.65 },
-        [L.rHip]: { x: 0.61, y: 0.65 },
-      };
+      const neuralImage = await generateTryOnNeural({
+        human: toDataUrlScaled(photo),
+        garment: toDataUrlScaled(garmentImg),
+        category,
+      });
 
-      landmarksRef.current =
-        samData?.landmarks && samData.landmarks[L.lShoulder] && samData.landmarks[L.lHip]
-          ? samData.landmarks
-          : defaultLandmarks;
+      setGenerationTime(((Date.now() - t0) / 1000).toFixed(1));
 
-      setProgress(85);
-      setGenMessage('Warping garment onto body contour...');
+      if (!neuralImage) {
+        throw new Error('FLUX GPU returned empty result.');
+      }
 
+      setProgress(90);
+      setGenMessage('Rendering result...');
+
+      resultImgRef.current = await loadImage(neuralImage);
       setProgress(100);
 
       setTimeout(() => {
         setStatus('ready');
         setStep(3);
-      }, 350);
+      }, 300);
     } catch (err) {
-      console.error('Try-on processing error:', err);
+      console.error('FLUX Try-On error:', err);
       setStatus('error');
       setStep(1);
-      setErrorMessage('Failed to process image. Please try another photo or studio model.');
-    }
-  }
-
-  async function handleGenerateNeuralVTON() {
-    if (!photoRef.current || !product?.image || isGeneratingNeural) return;
-    setIsGeneratingNeural(true);
-    try {
-      const category = product?.vtoType === 'lower-body' ? 'lower_body' : 'upper_body';
-      const garmentImg = await loadImage(product.image);
-      const neuralImage = await generateTryOnNeural({
-        human: toDataUrlScaled(photoRef.current),
-        garment: toDataUrlScaled(garmentImg),
-        category,
-      });
-      if (neuralImage) {
-        resultImgRef.current = await loadImage(neuralImage);
-        setRenderMode('neural');
-      }
-    } catch (err) {
-      console.warn('FLUX VTON error:', err);
-      alert(err.message || 'FLUX AI Try-On container is currently warming up on Modal GPU. Please retry in a few moments.');
-    } finally {
-      setIsGeneratingNeural(false);
+      setErrorMessage(
+        err.message?.includes('timed out')
+          ? 'Modal GPU is cold-starting. Please try again in 1-2 minutes.'
+          : err.message || 'Failed to generate try-on. Check Modal GPU status.'
+      );
     }
   }
 
@@ -393,10 +320,10 @@ export default function GarmentTryOn({ product, onClose }) {
             </div>
             <div>
               <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
-                FITSY AI Virtual Fitting Room
+                FITSY AI Virtual Try-On
               </h2>
               <p className="text-xs text-on-surface-variant">
-                Pose-Aware Garment Overlay &amp; AI Fit Analysis
+                FLUX.2 Klein 9B &bull; Modal Labs L40S GPU &bull; Real AI Try-On
               </p>
             </div>
           </div>
@@ -511,143 +438,70 @@ export default function GarmentTryOn({ product, onClose }) {
               <div className="lg:col-span-7 flex flex-col items-center">
                 <div className="relative rounded-3xl overflow-hidden border-2 border-primary/30 shadow-2xl bg-black max-h-[500px] flex items-center justify-center group w-full">
                   <canvas ref={canvasRef} className="max-w-full max-h-[500px] object-contain" />
-                  <div className="absolute top-4 right-4 bg-emerald-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {sam2Result?.fitMetrics?.poseVisibility != null
-                      ? `${(sam2Result.fitMetrics.poseVisibility * 100).toFixed(0)}% Pose Confidence`
-                      : 'Pose Detected'}
-                  </div>
 
                   <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5">
                     <Layers className="w-3 h-3 text-cyan-400" />
-                    {renderMode === 'neural' ? 'AI Style Preview (FLUX 9B)' : 'Identity-Preserving Try-On'}
+                    FLUX.2 Klein 9B • Modal L40S GPU
                   </div>
 
-                  {/* Body Mask Toggle Button Overlay (geometric mode only) */}
-                  {renderMode === 'geometric' && (
-                    <button
-                      onClick={() => setShowSamMask(!showSamMask)}
-                      className="absolute bottom-4 left-4 right-4 sm:left-auto bg-black/80 hover:bg-black text-white text-xs font-bold px-4 py-2 rounded-xl backdrop-blur-md border border-cyan-500/40 shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
-                    >
-                      <Eye className="w-4 h-4 text-cyan-400" />
-                      {showSamMask ? 'Hide Body Silhouette Mask' : 'Show Body Silhouette Mask'}
-                    </button>
+                  <div className="absolute top-4 right-4 bg-emerald-500 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    AI Generated
+                  </div>
+
+                  {generationTime && (
+                    <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg">
+                      ⚡ {generationTime}s on GPU
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Analysis & Controls Panel */}
+              {/* GPU Inference Details */}
               <div className="lg:col-span-5 space-y-6">
                 <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-3">
                   <h4 className="font-bold text-sm text-on-surface flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" /> Fit &amp; Pose Analysis
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" /> GPU Inference Details
                   </h4>
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
-                      <span className="text-on-surface-variant">Estimation Engine</span>
+                      <span className="text-on-surface-variant">Model</span>
                       <span className="font-bold text-cyan-600 dark:text-cyan-400 text-right">
-                        {renderMode === 'neural' ? 'FLUX 9B (Generative)' : 'BlazePose + Geometric Warp'}
+                        FLUX.2 Klein 9B + Try-On LoRA
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
-                      <span className="text-on-surface-variant">Shoulder Span</span>
+                      <span className="text-on-surface-variant">GPU</span>
+                      <span className="font-bold text-emerald-600">NVIDIA L40S 48GB</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-outline-variant/20">
+                      <span className="text-on-surface-variant">Inference Time</span>
                       <span className="font-bold text-emerald-600">
-                        {sam2Result?.fitMetrics?.shoulderSpanPx != null ? `${sam2Result.fitMetrics.shoulderSpanPx}px` : '—'}
+                        {generationTime ? `${generationTime}s` : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
-                      <span className="text-on-surface-variant">Body Coverage</span>
-                      <span className="font-bold text-emerald-600">
-                        {sam2Result?.fitMetrics?.bodyCoverage != null ? `${(sam2Result.fitMetrics.bodyCoverage * 100).toFixed(1)}%` : '—'}
-                      </span>
+                      <span className="text-on-surface-variant">Platform</span>
+                      <span className="font-bold text-primary">Modal Labs (Serverless)</span>
                     </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-on-surface-variant">Pose Visibility</span>
-                      <span className="font-bold text-primary">
-                        {sam2Result?.fitMetrics?.poseVisibility != null ? `${(sam2Result.fitMetrics.poseVisibility * 100).toFixed(1)}%` : '—'}
-                      </span>
-                    </div>
+                    {sam2Result?.fitMetrics?.poseVisibility != null && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-on-surface-variant">Pose Visibility</span>
+                        <span className="font-bold text-primary">
+                          {(sam2Result.fitMetrics.poseVisibility * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Fine-Tuning Sliders (geometric warp only) */}
-                {renderMode === 'geometric' && (
-                <div className="p-4 rounded-2xl bg-surface border border-outline-variant/40 space-y-3">
-                  <h5 className="text-xs font-bold uppercase tracking-wider text-on-surface">Fine-Tune Garment Position</h5>
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span>Width Scale</span>
-                        <span className="font-bold text-primary">{fit.widen.toFixed(2)}x</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.8"
-                        max="1.6"
-                        step="0.02"
-                        value={fit.widen}
-                        onChange={(e) => setFit((f) => ({ ...f, widen: Number(e.target.value) }))}
-                        className="w-full accent-primary cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span>Length Scale</span>
-                        <span className="font-bold text-primary">{fit.lengthen.toFixed(2)}x</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.8"
-                        max="1.8"
-                        step="0.02"
-                        value={fit.lengthen}
-                        onChange={(e) => setFit((f) => ({ ...f, lengthen: Number(e.target.value) }))}
-                        className="w-full accent-primary cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span>Vertical Shift</span>
-                        <span className="font-bold text-primary">{fit.offsetY > 0 ? `+${fit.offsetY}` : fit.offsetY}px</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="-50"
-                        max="50"
-                        step="1"
-                        value={fit.offsetY}
-                        onChange={(e) => setFit((f) => ({ ...f, offsetY: Number(e.target.value) }))}
-                        className="w-full accent-primary cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {/* FLUX AI Style Preview Button (opt-in, generates new image) */}
-                {renderMode === 'geometric' && (
-                  <div className="space-y-1.5">
-                    <button
-                      onClick={handleGenerateNeuralVTON}
-                      disabled={isGeneratingNeural}
-                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
-                    >
-                      <Sparkles className="w-4 h-4 animate-pulse" />
-                      {isGeneratingNeural ? 'Generating on Modal GPU...' : '✨ Generate AI Style Preview (FLUX 9B)'}
-                    </button>
-                    <p className="text-[10px] text-on-surface-variant text-center leading-tight">
-                      Generates a new AI-styled image for inspiration. Pose &amp; face may change.
-                    </p>
-                  </div>
-                )}
-                {renderMode === 'neural' && (
-                  <button
-                    onClick={() => setRenderMode('geometric')}
-                    className="w-full py-2.5 rounded-2xl bg-surface border border-outline-variant text-on-surface font-bold text-xs hover:border-primary flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    ← Back to Identity-Preserving Try-On
-                  </button>
-                )}
+                {/* Regenerate Button */}
+                <button
+                  onClick={() => { if (photoRef.current) processImage(photoRef.current.src); }}
+                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-primary text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" /> Regenerate on GPU (New Seed)
+                </button>
 
                 <div className="space-y-2">
                   <button
