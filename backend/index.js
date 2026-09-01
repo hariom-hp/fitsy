@@ -6,6 +6,15 @@ const dotenv = require('dotenv');
 // Load env vars FIRST before requiring local modules that use them
 dotenv.config();
 
+// Prevent server crash on broken pipes (EPIPE) or unexpected socket drops
+process.on('uncaughtException', (err) => {
+  if (err.code === 'EPIPE') return;
+  console.error('[Uncaught Exception]:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Unhandled Rejection]:', reason);
+});
+
 const connectDB = require('./config/db');
 const { handleStripeWebhook } = require('./controllers/webhookController');
 
