@@ -14,14 +14,23 @@ const SAMPLE_MODELS = [
   { id: 'm3', name: 'Studio Model C (Full Body)', gender: 'Female', height: "5'10\"", size: 'S', img: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&w=800&q=80' },
 ];
 
-async function loadImage(src) {
-  const img = new Image();
-  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
-    img.crossOrigin = 'anonymous';
-  }
-  img.src = src;
-  await img.decode();
-  return img;
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    if (!src) return reject(new Error('Image source is missing.'));
+    const img = new Image();
+    if (typeof src === 'string' && (src.startsWith('http://') || src.startsWith('https://'))) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      // Retry without crossOrigin in case CORS header is missing on asset
+      const fallback = new Image();
+      fallback.onload = () => resolve(fallback);
+      fallback.onerror = () => reject(new Error('Failed to load image asset.'));
+      fallback.src = src;
+    };
+    img.src = src;
+  });
 }
 
 // Downscaled JPEG data-URL for the backend payload (pose is normalized, so a
