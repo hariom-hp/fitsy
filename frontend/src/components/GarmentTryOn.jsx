@@ -286,34 +286,12 @@ export default function GarmentTryOn({ product, onClose }) {
         console.warn('Backend pose estimation error:', backendErr);
       }
 
-      // Try the neural engine first (photorealistic). It runs its own pose on
-      // the GPU, so it can succeed even if local MediaPipe above did not.
+      // ── Geometric warp is the primary mode: it preserves the user's exact
+      // face, pose, and background. FLUX AI is available as an opt-in
+      // "AI Style Preview" button on the result screen.
       setProgress(65);
-      setGenMessage('Generating photorealistic try-on on GPU...');
-      const category = product?.vtoType === 'lower-body' ? 'lower_body' : 'upper_body';
-      let neuralImage = null;
-      try {
-        neuralImage = await generateTryOnNeural({
-          human: toDataUrlScaled(photo),
-          garment: toDataUrlScaled(garmentImg),
-          category,
-        });
-      } catch (neuralErr) {
-        console.warn('Neural VTON unavailable, falling back to geometric warp:', neuralErr);
-      }
+      setGenMessage('Warping garment onto body contour...');
 
-      if (neuralImage) {
-        resultImgRef.current = await loadImage(neuralImage);
-        setRenderMode('neural');
-        setProgress(100);
-        setTimeout(() => {
-          setStatus('ready');
-          setStep(3);
-        }, 300);
-        return;
-      }
-
-      // ── Geometric fallback: uses measured or calibrated pose landmarks ────
       setRenderMode('geometric');
 
       const defaultLandmarks = {
@@ -542,7 +520,7 @@ export default function GarmentTryOn({ product, onClose }) {
 
                   <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5">
                     <Layers className="w-3 h-3 text-cyan-400" />
-                    {renderMode === 'neural' ? 'FLUX.2 Klein 9B AI (Modal GPU)' : 'Real-Time Geometric Warp'}
+                    {renderMode === 'neural' ? 'AI Style Preview (FLUX 9B)' : 'Identity-Preserving Try-On'}
                   </div>
 
                   {/* Body Mask Toggle Button Overlay (geometric mode only) */}
@@ -568,7 +546,7 @@ export default function GarmentTryOn({ product, onClose }) {
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
                       <span className="text-on-surface-variant">Estimation Engine</span>
                       <span className="font-bold text-cyan-600 dark:text-cyan-400 text-right">
-                        {renderMode === 'neural' ? 'FLUX.2 Klein 9B + Try-On LoRA' : 'MediaPipe BlazePose + SAM 2'}
+                        {renderMode === 'neural' ? 'FLUX 9B (Generative)' : 'BlazePose + Geometric Warp'}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-outline-variant/20">
@@ -646,15 +624,28 @@ export default function GarmentTryOn({ product, onClose }) {
                 </div>
                 )}
 
-                {/* FLUX Photorealistic Generation Button */}
+                {/* FLUX AI Style Preview Button (opt-in, generates new image) */}
                 {renderMode === 'geometric' && (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={handleGenerateNeuralVTON}
+                      disabled={isGeneratingNeural}
+                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                      {isGeneratingNeural ? 'Generating on Modal GPU...' : '✨ Generate AI Style Preview (FLUX 9B)'}
+                    </button>
+                    <p className="text-[10px] text-on-surface-variant text-center leading-tight">
+                      Generates a new AI-styled image for inspiration. Pose &amp; face may change.
+                    </p>
+                  </div>
+                )}
+                {renderMode === 'neural' && (
                   <button
-                    onClick={handleGenerateNeuralVTON}
-                    disabled={isGeneratingNeural}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-primary text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    onClick={() => setRenderMode('geometric')}
+                    className="w-full py-2.5 rounded-2xl bg-surface border border-outline-variant text-on-surface font-bold text-xs hover:border-primary flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Sparkles className="w-4 h-4 animate-pulse" />
-                    {isGeneratingNeural ? 'Generating on Modal GPU...' : '✨ Generate Photorealistic FLUX AI Look'}
+                    ← Back to Identity-Preserving Try-On
                   </button>
                 )}
 
