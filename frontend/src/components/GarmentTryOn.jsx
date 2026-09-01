@@ -243,6 +243,7 @@ export default function GarmentTryOn({ product, onClose }) {
         human: toDataUrlScaled(photo),
         garment: toDataUrlScaled(garmentImg),
         category,
+        garment_desc: product?.name || '',
       });
 
       setGenerationTime(((Date.now() - t0) / 1000).toFixed(1));

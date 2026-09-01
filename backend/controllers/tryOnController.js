@@ -93,7 +93,7 @@ const processTryOnComposite = async (req, res) => {
  */
 const generateNeuralTryOn = async (req, res) => {
   try {
-    const { human, garment, category = 'upper_body' } = req.body;
+    const { human, garment, category = 'upper_body', garment_desc = '', human_desc = '' } = req.body;
 
     if (!human || !garment) {
       return res.status(400).json({
@@ -108,7 +108,7 @@ const generateNeuralTryOn = async (req, res) => {
       });
     }
 
-    const { image } = await generateTryOn({ human, garment, category });
+    const { image } = await generateTryOn({ human, garment, category, garment_desc, human_desc });
     return res.status(200).json({ success: true, data: { image } });
   } catch (error) {
     // 503 (not 500): the neural engine is unavailable/unconfigured, so the

@@ -76,13 +76,13 @@ gpu_image = (
 
 def build_prompt(human_desc: str, top_desc: str, bottom_desc: str) -> str:
     if not human_desc:
-        human_desc = "the same person in the photo"
+        human_desc = "person, standing casually"
     if not top_desc:
-        top_desc = "the same top"
+        top_desc = "the top garment shown in the second reference image"
     if not bottom_desc:
-        bottom_desc = "the same pants"
+        bottom_desc = "the bottom pants shown in the third reference image"
         
-    return f"TRYON {human_desc}. The top should be {top_desc}. The bottom should be {bottom_desc}. Only change the specified garment. Keep the rest of the outfit, background, pose, and body exactly as in the original photo."
+    return f"TRYON {human_desc}. Replace the outfit with {top_desc} and {bottom_desc} as shown in the reference images. The final image is a full body shot."
 
 
 # ─── GPU Inference (Pure Serverless) ──────────────────────────────────────────
@@ -304,32 +304,52 @@ def create_blank_b64() -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
+def crop_half_b64(img_b64: str, keep: str) -> str:
+    """Crop the top or bottom half of an image. Used so the model
+    sees ONLY the unchanged clothing area, not the whole person."""
+    from PIL import Image as PILImage
+    img = PILImage.open(BytesIO(base64.b64decode(img_b64))).convert("RGB")
+    w, h = img.size
+    if keep == "bottom":
+        # Keep lower 60% (pants, shoes)
+        crop = img.crop((0, int(h * 0.40), w, h))
+    else:
+        # Keep upper 60% (top, accessories)
+        crop = img.crop((0, 0, w, int(h * 0.60)))
+    # Resize back to original dims so pipeline gets consistent sizes
+    crop = crop.resize((w, h), PILImage.Resampling.LANCZOS)
+    buf = BytesIO()
+    crop.save(buf, format="JPEG", quality=90)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
 @fastapi_app.post("/generate")
 async def generate_endpoint(req: GenerateRequest):
     try:
         human_b64 = fetch_image_b64(req.human)
         garment_b64 = fetch_image_b64(req.garment)
         
-        # Determine top/bottom based on category.
-        # KEY: For the slot we are NOT changing, send the ORIGINAL human photo
-        # so the model preserves the person's existing clothing in that area.
-        # A blank white image causes the model to hallucinate new clothing.
+        # When trying on ONLY a top (e.g. jacket/shirt):
+        # 1. Person reference image = full photo
+        # 2. Top reference image = garment
+        # 3. Bottom reference image = user's existing pants (cropped from user photo)
+        # Prompt instructs the model to use the user's existing pants from image 3.
         
         if req.category in ["upper_body", "dresses"]:
             top_b64 = garment_b64
-            bottom_b64 = human_b64  # keep original pants
-            top_desc = req.garment_desc if req.garment_desc else "the garment shown in the reference"
-            bottom_desc = "the same pants and shoes the person is already wearing, unchanged"
+            bottom_b64 = crop_half_b64(human_b64, keep="bottom")
+            top_desc = req.garment_desc if req.garment_desc else "the top garment shown in the second reference image"
+            bottom_desc = "the same pants shown in the third reference image"
         elif req.category == "lower_body":
-            top_b64 = human_b64  # keep original top
+            top_b64 = crop_half_b64(human_b64, keep="top")
             bottom_b64 = garment_b64
-            top_desc = "the same top and accessories the person is already wearing, unchanged"
-            bottom_desc = req.garment_desc if req.garment_desc else "the garment shown in the reference"
+            top_desc = "the same top shown in the second reference image"
+            bottom_desc = req.garment_desc if req.garment_desc else "the bottom pants shown in the third reference image"
         else:
             top_b64 = garment_b64
-            bottom_b64 = human_b64
-            top_desc = "the garment shown in the reference"
-            bottom_desc = "the same pants the person is already wearing, unchanged"
+            bottom_b64 = crop_half_b64(human_b64, keep="bottom")
+            top_desc = req.garment_desc if req.garment_desc else "the top garment shown in the second reference image"
+            bottom_desc = "the same pants shown in the third reference image"
 
         model = FluxKlein9BTryOn()
         result = model.generate.remote(

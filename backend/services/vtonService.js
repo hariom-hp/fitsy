@@ -13,7 +13,7 @@ const TIMEOUT_MS = 300000; // 5 minutes timeout for cold boot resilience
  * @param {string} payload.category - 'upper_body' | 'lower_body'
  * @returns {Promise<{image: string}>} base64 data-URL of the generated try-on
  */
-async function generateTryOn({ human, garment, category }) {
+async function generateTryOn({ human, garment, category, garment_desc, human_desc }) {
   const rawUrl = process.env.MODAL_VTON_URL;
   if (!rawUrl) {
     throw new Error('Neural try-on engine is not configured (MODAL_VTON_URL unset).');
@@ -29,7 +29,7 @@ async function generateTryOn({ human, garment, category }) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ human, garment, category, secret }),
+      body: JSON.stringify({ human, garment, category, garment_desc, human_desc, secret }),
       signal: controller.signal,
     });
 

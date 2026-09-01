@@ -41,11 +41,11 @@ export async function estimateBodyPositionSAM2(imageInput) {
  * @param {Object} payload - { human, garment, category }
  * @returns {Promise<string>} base64 data-URL of the generated image
  */
-export async function generateTryOnNeural({ human, garment, category }) {
+export async function generateTryOnNeural({ human, garment, category, garment_desc }) {
   const response = await fetch(`${API_BASE_URL}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ human, garment, category }),
+    body: JSON.stringify({ human, garment, category, garment_desc }),
   });
 
   const raw = await response.text();
